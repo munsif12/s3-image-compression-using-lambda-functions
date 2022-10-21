@@ -1,0 +1,16 @@
+{
+  "name": "s3-image-compression",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1237.0",
+    "compress-images": "^2.0.5"
+  }
+}
