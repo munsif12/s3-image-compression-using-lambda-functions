@@ -1,48 +1,56 @@
-const aws = require('aws-sdk');
-const fs = require('fs');
-function f() {
+const sharp = require('sharp') // https://github.com/Umkus/lambda-layer-sharp  (downlaod and add sharp library to your lambda layer)
+const AWS = require("aws-sdk")
+exports.handler = async (event) => {
+    try {
+        console.log("Incoming Event S3: ", event.Records[0].s3);
+        const Bucket = event.Records[0].s3.bucket.name;
+        const fileName = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
+        const message = `Bucket - ${Bucket} ->  Filename - ${fileName}`;
+        console.log(message)
 
-    aws.config.update({
-        accessKeyId: "AKIA4UFCCLUUPFQYHBXS",
-        secretAccessKey: "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",
-        // signatureVersion: config.signature_version,
-        region: "eu-west-2"
-    })
+        AWS.config.update({
+            accessKeyId: "*************", //your aceess key here
+            secretAccessKey: "***************************", //your secret key here
+            region: "us-east-1"
+        })
 
-    const s3 = new aws.S3({});
+        const S3 = new AWS.S3({});
+        var params = { Bucket, Key: fileName };
+        
+        // first get the image you want to compress from s3 bucket
+        const uncompressedImage = await S3.getObject({
+            ...params
+        }).promise();
 
-    const fileName = '123123.PNG';
-    var params = { Bucket: 'bdibucket1', Key: fileName };
+        console.log(uncompressedImage)
+        console.log('******************** FILE DOWNLOADED **************************')
 
-    s3.getObject(params, function (err, data) {
-        if (err) {
-            console.log(err)
-        }
-        else {
-            console.log(data)
-            console.log(fileName);
-            const fileData = data.Body;
-            const base64Image = Buffer.from(fileData).toString('base64');
-            console.log('before writing file to lambda function')
-            fs.writeFileSync(`./tmp/${fileName}`, base64Image, "base64", () => { console.log('file written successfully') });
-            console.log('file written successfully');
+        const metadata = await sharp(uncompressedImage.Body).metadata();
+        console.log('******************** FILE METADATA **************************')
 
-
-            //now get the file and compress it
-            const image = fs.createReadStream(`./tmp/${fileName}`)
-            image.on('open', function () {
-                // This just pipes the read stream to the response object (which goes to the client)
-                console.log('file opened successfully')
-                // image.pipe(res);
-            });
-
-            readStream.on('error', function (err) {
-                console.log('[ERROR]', err.message)
+        //compress image using sharp library
+        const compressedImageBuffer = await sharp(uncompressedImage.Body)
+            .resize({
+                width: metadata.width,
+                height: metadata.height
             })
-            // console.log(image)
+            .toFormat("jpeg", { mozjpeg: true })
+            .toBuffer();
+        console.log('******************** FILE COMPRESSED **************************')
 
-        }
-    });
+        //upload the compressed image to a different bucket else you will end up recursiverly calling the lambda
+        const compressedImageData = await S3.upload({
+            ...params,
+            Bucket: 'test-source-buket',
+            // key:`compressed-images/${fileName}`,
+            Body: compressedImageBuffer,
+            ContentType: "image"
+        }).promise();
 
-}
-f()
+        console.log(compressedImageData)
+        console.log('******************** FILE UPLPOADED AGAIN **************************')
+        return compressedImageData;
+    } catch (e) {
+        console.log('[ERROR]:', e.message)
+    }
+};
